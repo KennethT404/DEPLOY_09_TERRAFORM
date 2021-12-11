@@ -206,7 +206,7 @@ resource "aws_lb_target_group_attachment" "test" {
 resource "aws_lb_listener" "alb-listener" {
   load_balancer_arn = aws_lb.deploy9-alb.arn
   port              = "80"
-  protocol          = "HTTP"
+  protocol          = "tcp"
 
   default_action {
     type             = "forward"
