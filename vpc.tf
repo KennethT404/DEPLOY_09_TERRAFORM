@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/18"
 
   tags = {
-    Name = "Main VPC"
+    Name = "Deploy9 VPC"
   }
 }
 
@@ -14,7 +14,7 @@ resource "aws_subnet" "public01" {
   cidr_block = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "Public01"
+    Name = "Deploy9-pub1"
   }
 }
 
@@ -23,7 +23,7 @@ resource "aws_subnet" "private01" {
   cidr_block = "10.0.2.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "Private01"
+    Name = "Deploy9-priv1"
   }
 }
 
@@ -32,14 +32,14 @@ resource "aws_subnet" "public02" {
   cidr_block = "10.0.3.0/24"
   availability_zone = "us-east-1b"
   tags = {
-    Name = "Public02"
+    Name = "Deploy9-pub2"
   }
 }
 
 resource "aws_internet_gateway" "ig1" {
   vpc_id = aws_vpc.main.id
   tags = {
-    Name = "ig1"
+    Name = "Deploy9-Internet-Gateway"
   }
 }
 
@@ -52,7 +52,7 @@ resource "aws_route_table" "test-route-table" {
   }
 
   tags = {
-    "Name" = "tf-route-table-test"
+    "Name" = "Deploy9-pub-rt"
   }
 }
 
@@ -78,7 +78,7 @@ resource "aws_nat_gateway" "nat-gw1" {
   subnet_id     = aws_subnet.public01.id
 
   tags = {
-    Name = "tf-nat"
+    Name = "Deploy9-NAT-Gateway"
   }
   depends_on = [aws_internet_gateway.ig1]
 }
@@ -93,7 +93,7 @@ resource "aws_route_table" "tf-private-route-table" {
   }
 
   tags = {
-    "Name" = "tf-private-route-table"
+    "Name" = "Deploy9-pirv-rt"
   }
 }
 
@@ -105,8 +105,7 @@ resource "aws_route_table_association" "private01" {
 
 #14. Create Security Group to allow port 80, 443
 resource "aws_security_group" "deploy9-private-security-group" {
-  name = "project1-web-traffic"
-  description = "Allow web traffic"
+  name = "Deploy9-EC2-sg"
   vpc_id = aws_vpc.main.id
 
   ingress {
@@ -117,24 +116,34 @@ resource "aws_security_group" "deploy9-private-security-group" {
   } 
   
   egress {
-    from_port = 0
-    protocol = "-1"
-    ipv6_cidr_blocks = ["::/0"]
-    self = false
-    to_port = 0
-  } 
+      protocol = "tcp"
+      from_port= 80
+      to_port  = 80
+      cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = {
-    "Name" = "deploy9-allow-web-traffic"
+    "Name" =  "Deploy9-EC2-sg"
   }
 
 }
+
+resource "aws_security_group_rule" "ec2-to-db" {
+  type              = "egress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  source_security_group_id   = aws_security_group.deploy9-db-security-group.id
+  security_group_id = aws_security_group.deploy9-alb-security-group.id
+}
+
+
 # CREATE EC2
 resource "aws_instance" "EC2" {
   ami           = "ami-083654bd07b5da81d"
   instance_type = "t2.micro"
   subnet_id = aws_subnet.private01.id
-  vpc_security_group_ids = [aws_security_group.deploy9-private-security-group.id]
+  security_groups= [aws_security_group.deploy9-private-security-group.id]
 
   tags = {
     Name = "App EC2"
@@ -146,14 +155,13 @@ resource "aws_security_group" "deploy9-alb-security-group" {
   description = "Allow web traffic into app ec2"
   vpc_id = aws_vpc.main.id
 
-  ingress {
-    from_port = 80
-    protocol = "tcp"
-    to_port = 80
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  } 
-  
+    ingress {
+      protocol = "tcp"
+      from_port= 80
+      to_port  = 80
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+
   tags = {
     "Name" = "deploy9-alb-sg"
   }
@@ -206,7 +214,7 @@ resource "aws_lb_target_group_attachment" "test" {
 resource "aws_lb_listener" "alb-listener" {
   load_balancer_arn = aws_lb.deploy9-alb.arn
   port              = "80"
-  protocol          = "tcp"
+  protocol          = "HTTP"
 
   default_action {
     type             = "forward"
